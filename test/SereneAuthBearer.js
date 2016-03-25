@@ -18,7 +18,8 @@ describe('SereneAuthBearer', function () {
           list: ['*'],
           get: ['foo', 'bar'],
           create: ['**'],
-          update: []
+          update: [],
+          replace: 'foo'
         }
       }
     };
@@ -125,19 +126,49 @@ describe('SereneAuthBearer', function () {
     });
   });
 
+
+  describe('stated role', function () {
+    it('should allow user with correct role', function () {
+      let authorization = 'Bearer ' + jwt.sign({roles: ['foo']}, 'secret');
+      return service.dispatch('replace', 'widgets', null, null, null, {authorization});
+    });
+
+    it('should not allow user without correct role', function () {
+      let authorization = 'Bearer ' + jwt.sign({roles: ['fish']}, 'secret');
+
+      return service.dispatch('replace', 'widgets',  null, null, null, {authorization})
+        .then(
+          () => { throw new Error('expected error'); },
+          (err) => { expect(err.status).to.equal(403); }
+        );
+    });
+
+    it('should not allow unauthenticated user', function () {
+      return service.dispatch('replace', 'widgets')
+        .then(
+          () => { throw new Error('expected error'); },
+          (err) => { expect(err.status).to.equal(401); }
+        );
+    });
+  });
+
+
   describe('undefined', function () {
-    it('should allow logged in user with no roles', function () {
+    it('should 405 for unauthenticated user', function () {
+      return service.dispatch('delete', 'widgets')
+        .then(
+          () => { throw new Error('expected error'); },
+          (err) => { expect(err.status).to.equal(405); }
+        );
+    });
+
+    it('should 405 for authenticated user', function () {
       let authorization = 'Bearer ' + jwt.sign({roles: []}, 'secret');
-      return service.dispatch('delete', 'widgets', null, null, null, {authorization});
-    });
-
-    it('should allow logged in user with roles', function () {
-      let authorization = 'Bearer ' + jwt.sign({roles: ['a', 'b']}, 'secret');
-      return service.dispatch('delete', 'widgets', null, null, null, {authorization});
-    });
-
-    it('should allow unauthenticated user', function () {
-      return service.dispatch('delete', 'widgets');
+      return service.dispatch('delete', 'widgets', null, null, null, {authorization})
+        .then(
+          () => { throw new Error('expected error'); },
+          (err) => { expect(err.status).to.equal(405); }
+        );
     });
   });
 });

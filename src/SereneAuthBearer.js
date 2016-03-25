@@ -1,7 +1,7 @@
 
 import jwt from 'jsonwebtoken';
 import Promise from 'any-promise';
-import {NotAuthenticatedError, ForbiddenError} from 'http-status-errors';
+import {ForbiddenError, MethodNotAllowedError, NotAuthenticatedError} from 'http-status-errors';
 
 
 export default class SereneAuthBearer {
@@ -15,44 +15,53 @@ export default class SereneAuthBearer {
     if (!request.resource)
       throw new Error('request.resource not present - use SereneResources before this middleware');
 
-    let header = request.headers && request.headers.authorization || '';
-    let [scheme, token] = header.split(' ');
+    let acl = request.resource.acl[request.operation.name];
 
-    if (scheme.toLowerCase() === 'bearer') {
-      return new Promise((resolve, reject) => {
-        jwt.verify(token, this.secret, this.options, function (err, token) {
-          if (err) {
-            reject(new ForbiddenError('Operation forbidden', {cause: err}));
+    if (acl) {
+      let header = request.headers && request.headers.authorization || '';
+      let [scheme, token] = header.split(' ');
 
-          } else {
-            let roles = token.roles || token.scopes || token.role || token.scope;
+      if (scheme.toLowerCase() === 'bearer') {
+        return new Promise((resolve, reject) => {
+          jwt.verify(token, this.secret, this.options, function (err, token) {
+            if (err) {
+              reject(new ForbiddenError('Operation forbidden', {cause: err}));
 
-            if (checkAcl(request.resource.acl, request.operation.name, roles)) {
-              resolve();
             } else {
-              reject(new ForbiddenError('You do not have sufficient priveleges to complete the requested operation'))
-            }
-          }
-        });
-      });
+              let roles = token.roles || token.scopes || token.role || token.scope;
 
-    } else if (!checkAcl(request.resource.acl, request.operation.name, null)) {
-      throw new NotAuthenticatedError('You need to be authenticated to complete the requested operation');
+              if (checkAcl(acl, roles)) {
+                resolve();
+              } else {
+                reject(new ForbiddenError('You do not have sufficient priveleges to complete the requested operation'))
+              }
+            }
+          });
+        });
+
+      } else if (!checkAcl(acl, null)) {
+        throw new NotAuthenticatedError('You need to be authenticated to complete the requested operation');
+      }
+
+    } else {
+      throw new MethodNotAllowedError(`operation ${request.operation.name} not allowed for resource ${request.resourceName}`);
     }
   }
 };
 
 
-function checkAcl(acl, operation, roles) {
-  let op = acl[operation];
+function checkAcl(acl, roles) {
+  if (!Array.isArray(acl)) {
+    acl = [acl];
+  }
 
-  if (!op || op.length === 1 && op[0] === '**') {
+  if (acl.length === 1 && acl[0] === '**') {
     return true;
 
-  } else if (op.length === 1 && op[0] === '*' && roles !== null) {
+  } else if (acl.length === 1 && acl[0] === '*' && roles !== null) {
     return true;
 
-  } else if (!op.length) {
+  } else if (!acl.length) {
     return false;
 
   } else if (roles !== null) {
@@ -65,7 +74,7 @@ function checkAcl(acl, operation, roles) {
       map[role] = true;
     }
 
-    for (let role of op) {
+    for (let role of acl) {
       if (map[role])
         return true;
     }

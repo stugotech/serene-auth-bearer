@@ -50,6 +50,34 @@ describe('SereneAuthBearer', function () {
   });
 
 
+  describe('* (request.user)', function () {
+    beforeEach(function () {
+      service.handlers = service.handlers.slice(0, 1);
+    });
+
+    it('should allow logged in user with no roles', function () {
+      service.use((request) => request.user = {roles: []});
+      service.use(new SereneAuthBearer());
+      return service.dispatch('list', 'widgets');
+    });
+
+    it('should allow logged in user with roles', function () {
+      service.use((request) => request.user = {roles: ['a', 'b']});
+      service.use(new SereneAuthBearer());
+      return service.dispatch('list', 'widgets');
+    });
+
+    it('should not allow unauthenticated user', function () {
+      service.use(new SereneAuthBearer());
+      return service.dispatch('list', 'widgets')
+        .then(
+          () => { throw new Error('expected error'); },
+          (err) => { expect(err.status).to.equal(401); }
+        );
+    });
+  });
+
+
   describe('stated roles', function () {
     it('should allow user with correct role', function () {
       let authorization = 'Bearer ' + jwt.sign({roles: ['foo']}, 'secret');

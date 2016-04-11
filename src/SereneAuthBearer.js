@@ -18,29 +18,36 @@ export default class SereneAuthBearer {
     let acl = request.resource.acl[request.operation.name];
 
     if (acl) {
-      let header = request.headers && request.headers.authorization || '';
-      let [scheme, token] = header.split(' ');
+      if (request.user) {
+        if (!checkAcl(acl, request.user.roles || request.user.scopes || request.user.role || request.user.scope)) {
+          throw new ForbiddenError('You do not have sufficient priveleges to complete the requested operation');
+        }
 
-      if (scheme.toLowerCase() === 'bearer') {
-        return new Promise((resolve, reject) => {
-          jwt.verify(token, this.secret, this.options, function (err, token) {
-            if (err) {
-              reject(new ForbiddenError('Operation forbidden', {cause: err}));
+      } else {
+        let header = request.headers && request.headers.authorization || '';
+        let [scheme, token] = header.split(' ');
 
-            } else {
-              let roles = token.roles || token.scopes || token.role || token.scope;
+        if (scheme.toLowerCase() === 'bearer') {
+          return new Promise((resolve, reject) => {
+            jwt.verify(token, this.secret, this.options, function (err, token) {
+              if (err) {
+                reject(new ForbiddenError('Operation forbidden', {cause: err}));
 
-              if (checkAcl(acl, roles)) {
-                resolve();
               } else {
-                reject(new ForbiddenError('You do not have sufficient priveleges to complete the requested operation'))
-              }
-            }
-          });
-        });
+                let roles = token.roles || token.scopes || token.role || token.scope;
 
-      } else if (!checkAcl(acl, null)) {
-        throw new NotAuthenticatedError('You need to be authenticated to complete the requested operation');
+                if (checkAcl(acl, roles)) {
+                  resolve();
+                } else {
+                  reject(new ForbiddenError('You do not have sufficient priveleges to complete the requested operation'))
+                }
+              }
+            });
+          });
+
+        } else if (!checkAcl(acl, null)) {
+          throw new NotAuthenticatedError('You need to be authenticated to complete the requested operation');
+        }
       }
 
     } else {

@@ -1,6 +1,6 @@
 {
   "name": "serene-auth-bearer",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Serene middleware to perform Bearer auth with ACLs",
   "main": "index.js",
   "directories": {
